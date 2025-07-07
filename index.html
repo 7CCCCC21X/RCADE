@@ -8,32 +8,32 @@
 <style>
 :root{
   --bg:#f4f5f7;--card:#fff;--txt:#202124;--sub:#70757a;
-  --accent:#0066d9;--accent-dark:#004fa9;--ok:#16a34a;--bad:#dc2626;
-}
-@media (prefers-color-scheme:dark){
-  :root{--bg:#1a1c1f;--card:#202225;--txt:#e8eaed;--sub:#9aa0a6}
-}
+  --accent:#0066d9;--accent-dark:#004fa9;--ok:#16a34a;--bad:#dc2626}
+@media(prefers-color-scheme:dark){
+  :root{--bg:#1a1c1f;--card:#202225;--txt:#e8eaed;--sub:#9aa0a6}}
 *{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,Segoe UI,PingFang SC,Helvetica,Arial,sans-serif}
 body{background:var(--bg);color:var(--txt);padding:32px 16px;display:flex;justify-content:center}
-.container{max-width:680px;width:100%;background:var(--card);border-radius:16px;padding:32px;box-shadow:0 12px 28px rgba(0,0,0,.08)}
+.container{max-width:720px;width:100%;background:var(--card);border-radius:16px;padding:32px;box-shadow:0 12px 28px rgba(0,0,0,.08)}
 h1{font-size:22px;margin-bottom:20px;color:var(--accent);text-align:center}
 label{font-weight:700;margin-top:20px;display:block}
 textarea{
   width:100%;min-height:150px;padding:12px;font-size:14px;border:1px solid #ccc;border-radius:10px;
-  background:var(--card);color:var(--txt);resize:vertical
-}
-button{
-  width:100%;margin-top:24px;padding:14px;font-size:15px;border:none;border-radius:10px;
-  background:var(--accent);color:#fff;cursor:pointer;transition:.2s
-}
-button:hover{background:var(--accent-dark)}
+  background:var(--card);color:var(--txt);resize:vertical}
+button,summary{
+  user-select:none;
+  display:inline-block;cursor:pointer;border:none;border-radius:10px;padding:12px 16px;font-size:14px;
+  background:var(--accent);color:#fff;transition:.2s;margin-top:20px;text-align:center}
+button:hover,summary:hover{background:var(--accent-dark)}
+small{color:var(--sub);font-size:13px;margin-left:6px}
+.tools{display:flex;flex-wrap:wrap;gap:12px;margin-top:10px}
+.switch{display:flex;align-items:center;gap:6px;font-size:14px;margin-top:24px}
+.switch input{accent-color:var(--accent);cursor:pointer}
 .resultBox{margin-top:28px;display:none}
 .count{font-size:15px;margin-bottom:10px}
 pre{
   white-space:pre-wrap;word-break:break-all;
   font-family:JetBrains Mono,Consolas,monospace;font-size:13px;
-  background:var(--bg);padding:18px;border-radius:12px;overflow:auto
-}
+  background:var(--bg);padding:18px;border-radius:12px;overflow:auto}
 .ok{color:var(--ok);font-weight:700}
 .bad{color:var(--bad);font-weight:700}
 footer{margin-top:26px;text-align:center;font-size:14px}
@@ -45,10 +45,15 @@ footer a:hover{text-decoration:underline}
 <div class="container">
   <h1>RCADE 社区福利 – TGE 资格批量查询</h1>
 
-  <label for="addrInput">输入待查询地址（每行一个）</label>
+  <label for="addrInput">输入待查询地址（每行一个）<small>自动去重 / 校验</small></label>
   <textarea id="addrInput" placeholder="0x1234...\n0x5678..."></textarea>
 
-  <button id="checkBtn">开始查询</button>
+  <div class="tools">
+    <button id="checkBtn">开始查询</button>
+    <button id="copyBtn" style="display:none">复制符合地址</button>
+  </div>
+
+  <label class="switch"><input type="checkbox" id="showPassOnly">只看符合资格</label>
 
   <div class="resultBox" id="outBox">
     <div class="count" id="stats"></div>
@@ -64,36 +69,59 @@ let eligibleSet=new Set();
 fetch('eligible.txt?'+Date.now())
   .then(r=>r.text())
   .then(txt=>{
-    eligibleSet=new Set(
-      txt.split(/\r?\n/).map(s=>s.trim().toLowerCase()).filter(Boolean)
-    );
-    console.log('已加载资格地址',eligibleSet.size);
+    eligibleSet=new Set(txt.split(/\r?\n/).map(s=>s.trim().toLowerCase()).filter(Boolean));
+    console.log('loaded',eligibleSet.size);
   })
   .catch(e=>alert('无法加载资格名单：'+e));
 
-/* ------- 查询逻辑 ------- */
+/* ------- 工具 ------- */
 const $=id=>document.getElementById(id);
+const addrReg=/^0x[a-fA-F0-9]{40}$/;
+
+function sanitizeInput(raw){
+  const seen=new Set(),valid=[];
+  raw.split(/\r?\n/).forEach(s=>{
+    const a=s.trim().toLowerCase();
+    if(addrReg.test(a)&&!seen.has(a)){valid.push(a);seen.add(a);}
+  });
+  return valid;
+}
+
+/* ------- 查询逻辑 ------- */
 $('checkBtn').addEventListener('click',()=>{
-  if(!eligibleSet.size){alert('资格名单尚未加载，请稍后重试');return;}
+  if(!eligibleSet.size){alert('资格名单尚未加载，请稍候重试');return;}
 
-  const list=$('addrInput').value
-      .split(/\r?\n/)
-      .map(s=>s.trim().toLowerCase())
-      .filter(Boolean);
+  const list=sanitizeInput($('addrInput').value);
+  if(!list.length){alert('请输入有效的以 0x 开头的 40 位地址');return;}
 
-  if(!list.length){alert('请输入要查询的地址');return;}
-
-  let okCount=0;
-  const lines=list.map((addr,idx)=>{
+  let okCount=0,rows=[];
+  list.forEach((addr,idx)=>{
     const ok=eligibleSet.has(addr);
     if(ok) okCount++;
-    const mark=ok?`✅ <span class="ok">${addr}</span>`:`❌ <span class="bad">${addr}</span>`;
-    return `${idx+1}. ${mark}`;
+    const cls=ok?'ok':'bad';
+    rows.push(`${idx+1}. <span class="${cls}">${addr}</span>`);
   });
 
   $('stats').textContent=`符合资格 ${okCount} / 查询总数 ${list.length}`;
-  $('matchList').innerHTML=lines.join('\n');
+  $('matchList').innerHTML=rows.join('\n');
   $('outBox').style.display='block';
+  $('copyBtn').style.display= okCount? 'inline-block':'none';
+});
+
+/* ------- 复制符合资格 ------- */
+$('copyBtn').addEventListener('click',()=>{
+  const lines=[...$('matchList').querySelectorAll('.ok')].map(e=>e.textContent);
+  navigator.clipboard.writeText(lines.join('\n'))
+    .then(()=>alert('已复制 '+lines.length+' 个地址'))
+    .catch(()=>alert('复制失败，请手动选择文本'));
+});
+
+/* ------- 过滤切换 ------- */
+$('showPassOnly').addEventListener('change',e=>{
+  const hide = e.target.checked;
+  [...$('matchList').querySelectorAll('.bad')].forEach(el=>{
+    el.parentElement.style.display = hide ? 'none' : '';
+  });
 });
 </script>
 </body>
