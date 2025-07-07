@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RCADE 社区福利 – TGE 资格批量查询</title>
+<style>
+:root{
+  --bg:#f9f9f9;--card:#fff;--txt:#222;--sub:#6b7280;
+  --accent:#0078d4;--accent-dark:#005fa3;--ok:#16a34a;--bad:#dc2626
+}
+@media(prefers-color-scheme:dark){
+  :root{--bg:#111827;--card:#1f2937;--txt:#f3f4f6;--sub:#9ca3af}
+}
+*{box-sizing:border-box;margin:0;padding:0;font-family:Inter,-apple-system,"PingFang SC",sans-serif}
+body{background:var(--bg);color:var(--txt);padding:28px}
+h1{font-size:20px;margin-bottom:18px;color:var(--accent)}
+label{display:block;font-weight:700;margin-top:18px}
+textarea{
+  width:100%;padding:10px;font-size:14px;border:1px solid #ccc;border-radius:8px;
+  background:var(--card);color:var(--txt);resize:vertical;min-height:140px
+}
+button{
+  margin-top:22px;width:100%;padding:12px;font-size:15px;border:none;border-radius:10px;
+  background:var(--accent);color:#fff;cursor:pointer;transition:.2s
+}
+button:hover{background:var(--accent-dark)}
+#outBox{margin-top:28px;background:var(--card);padding:20px;border-radius:12px}
+.ok{color:var(--ok);font-weight:700}
+.bad{color:var(--bad);font-weight:700}
+.count{margin-bottom:10px;color:var(--sub);font-size:13px}
+pre{white-space:pre-wrap;word-break:break-all;font-family:JetBrains Mono,Consolas,monospace;font-size:13px}
+</style>
+</head>
+<body>
+<h1>RCADE 社区福利 – TGE 资格批量查询</h1>
+
+<label>输入待检查地址（可多行，每行一个）</label>
+<textarea id="addrInput" placeholder="0x1234...\n0x5678..."></textarea>
+
+<button id="checkBtn">开始查询</button>
+
+<div id="outBox" style="display:none">
+  <div class="count" id="stats"></div>
+  <pre id="matchList"></pre>
+</div>
+
+<script>
+/* ------- 载入后台资格名单 ------- */
+let eligibleSet=new Set();
+fetch('eligible.txt?'+Date.now())          // 加时间戳避免缓存
+  .then(r=>r.text())
+  .then(txt=>{
+    eligibleSet=new Set(
+      txt.split(/\r?\n/).map(s=>s.trim().toLowerCase()).filter(Boolean)
+    );
+    console.log('已加载资格地址',eligibleSet.size);
+  })
+  .catch(err=>alert('无法加载资格名单：'+err));
+
+/* ------- 查询逻辑 ------- */
+const $=id=>document.getElementById(id);
+$('checkBtn').addEventListener('click',()=>{
+  if(!eligibleSet.size){alert('资格名单尚未加载，请稍候重试');return;}
+
+  const input=$('addrInput').value
+      .split(/\r?\n/)
+      .map(s=>s.trim().toLowerCase())
+      .filter(Boolean);
+
+  if(!input.length){alert('请输入要查询的地址');return;}
+
+  const ok=[],bad=[];
+  input.forEach(a=>eligibleSet.has(a)?ok.push(a):bad.push(a));
+
+  $('stats').textContent=`符合资格 ${ok.length} / 查询总数 ${input.length}`;
+  $('matchList').innerHTML=
+      ok.map(a=>`✅ <span class="ok">${a}</span>`).join('\n')+
+      (bad.length?'\n\n'+bad.map(a=>`❌ <span class="bad">${a}</span>`).join('\n'):'');
+  $('outBox').style.display='block';
+});
+</script>
+</body>
+</html>
