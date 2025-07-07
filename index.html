@@ -4,51 +4,64 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>RCADE 社区福利 – TGE 资格批量查询</title>
+<meta name="color-scheme" content="light dark">
 <style>
 :root{
-  --bg:#f9f9f9;--card:#fff;--txt:#222;--sub:#6b7280;
-  --accent:#0078d4;--accent-dark:#005fa3;--ok:#16a34a;--bad:#dc2626
+  --bg:#f4f5f7;--card:#fff;--txt:#202124;--sub:#70757a;
+  --accent:#0066d9;--accent-dark:#004fa9;--ok:#16a34a;--bad:#dc2626;
 }
-@media(prefers-color-scheme:dark){
-  :root{--bg:#111827;--card:#1f2937;--txt:#f3f4f6;--sub:#9ca3af}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#1a1c1f;--card:#202225;--txt:#e8eaed;--sub:#9aa0a6}
 }
-*{box-sizing:border-box;margin:0;padding:0;font-family:Inter,-apple-system,"PingFang SC",sans-serif}
-body{background:var(--bg);color:var(--txt);padding:28px}
-h1{font-size:20px;margin-bottom:18px;color:var(--accent)}
-label{display:block;font-weight:700;margin-top:18px}
+*{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,Segoe UI,PingFang SC,Helvetica,Arial,sans-serif}
+body{background:var(--bg);color:var(--txt);padding:32px 16px;display:flex;justify-content:center}
+.container{max-width:680px;width:100%;background:var(--card);border-radius:16px;padding:32px;box-shadow:0 12px 28px rgba(0,0,0,.08)}
+h1{font-size:22px;margin-bottom:20px;color:var(--accent);text-align:center}
+label{font-weight:700;margin-top:20px;display:block}
 textarea{
-  width:100%;padding:10px;font-size:14px;border:1px solid #ccc;border-radius:8px;
-  background:var(--card);color:var(--txt);resize:vertical;min-height:140px
+  width:100%;min-height:150px;padding:12px;font-size:14px;border:1px solid #ccc;border-radius:10px;
+  background:var(--card);color:var(--txt);resize:vertical
 }
 button{
-  margin-top:22px;width:100%;padding:12px;font-size:15px;border:none;border-radius:10px;
+  width:100%;margin-top:24px;padding:14px;font-size:15px;border:none;border-radius:10px;
   background:var(--accent);color:#fff;cursor:pointer;transition:.2s
 }
 button:hover{background:var(--accent-dark)}
-#outBox{margin-top:28px;background:var(--card);padding:20px;border-radius:12px}
+.resultBox{margin-top:28px;display:none}
+.count{font-size:15px;margin-bottom:10px}
+pre{
+  white-space:pre-wrap;word-break:break-all;
+  font-family:JetBrains Mono,Consolas,monospace;font-size:13px;
+  background:var(--bg);padding:18px;border-radius:12px;overflow:auto
+}
 .ok{color:var(--ok);font-weight:700}
 .bad{color:var(--bad);font-weight:700}
-.count{margin-bottom:10px;color:var(--sub);font-size:13px}
-pre{white-space:pre-wrap;word-break:break-all;font-family:JetBrains Mono,Consolas,monospace;font-size:13px}
+footer{margin-top:26px;text-align:center;font-size:14px}
+footer a{color:var(--accent);text-decoration:none;font-weight:700}
+footer a:hover{text-decoration:underline}
 </style>
 </head>
 <body>
-<h1>RCADE 社区福利 – TGE 资格批量查询</h1>
+<div class="container">
+  <h1>RCADE 社区福利 – TGE 资格批量查询</h1>
 
-<label>输入待检查地址（可多行，每行一个）</label>
-<textarea id="addrInput" placeholder="0x1234...\n0x5678..."></textarea>
+  <label for="addrInput">输入待查询地址（每行一个）</label>
+  <textarea id="addrInput" placeholder="0x1234...\n0x5678..."></textarea>
 
-<button id="checkBtn">开始查询</button>
+  <button id="checkBtn">开始查询</button>
 
-<div id="outBox" style="display:none">
-  <div class="count" id="stats"></div>
-  <pre id="matchList"></pre>
+  <div class="resultBox" id="outBox">
+    <div class="count" id="stats"></div>
+    <pre id="matchList"></pre>
+  </div>
+
+  <footer>🐦 关注作者推特 <a href="https://x.com/0xXIAOc" target="_blank">@0xXIAOc</a></footer>
 </div>
 
 <script>
-/* ------- 载入后台资格名单 ------- */
+/* ------- 载入后台资格名单 eligible.txt ------- */
 let eligibleSet=new Set();
-fetch('eligible.txt?'+Date.now())          // 加时间戳避免缓存
+fetch('eligible.txt?'+Date.now())
   .then(r=>r.text())
   .then(txt=>{
     eligibleSet=new Set(
@@ -56,27 +69,30 @@ fetch('eligible.txt?'+Date.now())          // 加时间戳避免缓存
     );
     console.log('已加载资格地址',eligibleSet.size);
   })
-  .catch(err=>alert('无法加载资格名单：'+err));
+  .catch(e=>alert('无法加载资格名单：'+e));
 
 /* ------- 查询逻辑 ------- */
 const $=id=>document.getElementById(id);
 $('checkBtn').addEventListener('click',()=>{
-  if(!eligibleSet.size){alert('资格名单尚未加载，请稍候重试');return;}
+  if(!eligibleSet.size){alert('资格名单尚未加载，请稍后重试');return;}
 
-  const input=$('addrInput').value
+  const list=$('addrInput').value
       .split(/\r?\n/)
       .map(s=>s.trim().toLowerCase())
       .filter(Boolean);
 
-  if(!input.length){alert('请输入要查询的地址');return;}
+  if(!list.length){alert('请输入要查询的地址');return;}
 
-  const ok=[],bad=[];
-  input.forEach(a=>eligibleSet.has(a)?ok.push(a):bad.push(a));
+  let okCount=0;
+  const lines=list.map((addr,idx)=>{
+    const ok=eligibleSet.has(addr);
+    if(ok) okCount++;
+    const mark=ok?`✅ <span class="ok">${addr}</span>`:`❌ <span class="bad">${addr}</span>`;
+    return `${idx+1}. ${mark}`;
+  });
 
-  $('stats').textContent=`符合资格 ${ok.length} / 查询总数 ${input.length}`;
-  $('matchList').innerHTML=
-      ok.map(a=>`✅ <span class="ok">${a}</span>`).join('\n')+
-      (bad.length?'\n\n'+bad.map(a=>`❌ <span class="bad">${a}</span>`).join('\n'):'');
+  $('stats').textContent=`符合资格 ${okCount} / 查询总数 ${list.length}`;
+  $('matchList').innerHTML=lines.join('\n');
   $('outBox').style.display='block';
 });
 </script>
